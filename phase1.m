@@ -65,7 +65,7 @@ function phase1(filePaths)
         fprintf('Playing cleaned mono from %s at %d Hz...\n', inFile, fs);
         try
             sound(monoSignal, fs);
-            pause(min(3, numel(monoSignal)/fs)); % preview up to 3 seconds
+            pause(numel(monoSignal)/fs); % wait for full playback duration
         catch
             % playback may fail on some systems; continue processing
         end
@@ -108,7 +108,12 @@ function phase1(filePaths)
 
         processedSignals{end+1} = processedSignal; %#ok<AGROW>
         processedSampleRates(end+1) = processedFs; %#ok<AGROW>
-        processedFileLabels{end+1} = ~isempty(resampledOut) * string(resampledOut) + isempty(resampledOut) * string(cleanedOut); %#ok<AGROW>
+        if ~isempty(resampledOut)
+            currentLabel = string(resampledOut);
+        else
+            currentLabel = string(cleanedOut);
+        end
+        processedFileLabels{end+1} = currentLabel; %#ok<AGROW>
     end
 
     if isempty(processedSignals)
@@ -138,7 +143,7 @@ function phase1(filePaths)
     fprintf('Playing 1 kHz cosine (%.3f s) at %d Hz...\n', durationSeconds, cosineFs);
     try
         sound(cosineSignal, cosineFs);
-        pause(min(3, durationSeconds));
+        pause(durationSeconds); % wait for full playback duration
     catch
     end
 
