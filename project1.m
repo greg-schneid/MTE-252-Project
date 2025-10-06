@@ -5,21 +5,28 @@ if ~exist(outputDir, 'dir')
     mkdir(outputDir);
 end
 
-% Config
-audioFiles = dir(fullfile(selectedDir, '*.*'));
+% Parameters
 validExts = {'.wav', '.flac', '.m4a', '.mp3'};
 targetFs = 16000; % Hz
 playAudio = false; % set to true to listen to cleaned mono audio
-playCosine = true;
+playCosine = false;
+playDuration = 5; % seconds to play cleaned audio (max 5s)
 
 % Variables
-files = getFiles(audioFiles, validExts);
+files = getFiles(selectedDir, validExts);
 processedSignals = {};
 processedFileLabels = {};
 
 for fileIdx = 1:length(files)
     fprintf('Processing file %d of %d: %s\n', fileIdx, length(files), files{fileIdx});
-    [processedSignals{fileIdx}, processedFileLabels{fileIdx}] = processAudio(files{fileIdx}, targetFs, playAudio);
+    
+    [processedSignal, processedLabel, success] = processAudio(files{fileIdx}, targetFs, outputDir, playAudio, playDuration);
+    if ~success
+        fprintf('Failed to process %s\n', files{fileIdx});
+    else
+        processedSignals{end+1} = processedSignal;
+        processedFileLabels{end+1} = processedLabel;
+    end
 end
 
 if isempty(processedSignals)
@@ -31,16 +38,18 @@ end
 
 for i = 1:length(processedFileLabels)
     fprintf('Plotting File %d of %d: %s\n', i, length(processedFileLabels), processedFileLabels{i});
-    plotAudio(processedFileLabels{i}, playCosine);
+    plotAudio(processedFileLabels{i});
+    plotCosine(processedFileLabels{i}, playCosine, playDuration);
 end
 
 
-
-function fileList = getFiles(audioFiles, validExts)
+function fileList = getFiles(selectedDir, validExts)
+    fileList = {};
+    audioFiles = dir(fullfile(selectedDir, '*.*'));
     for k = 1:numel(audioFiles)
         [~, ~, ext] = fileparts(audioFiles(k).name);
         if any(strcmpi(ext, validExts)) && ~audioFiles(k).isdir
-            fileList{end+1} = fullfile(selectedDir, audioFiles(k).name); %#ok<AGROW>
+            fileList{end+1} = fullfile(selectedDir, audioFiles(k).name);
         end
     end
 
@@ -54,7 +63,7 @@ function fileList = getFiles(audioFiles, validExts)
     end
 end
 
-function [processedSignal, processedFileLabel, success] = processAudio(filePath, targetFs, playAudio)
+function [processedSignal, processedFileLabel, success] = processAudio(filePath, targetFs, outputDir, playAudio, playDuration)
 % phase1: Read, normalize (mono), optionally resample to 16 kHz, analyze, and generate signals.
 % Usage:
 %   phase1                 % prompts to select one or more audio files
@@ -68,7 +77,12 @@ function [processedSignal, processedFileLabel, success] = processAudio(filePath,
 % - Plot waveform (sample index vs amplitude) for the first processed file
 % - Generate a 1 kHz cosine matching the processed signal length and duration
 % - Play the cosine and plot two cycles versus time
+    processedSignal = [];
+    processedFileLabel = '';
     success = false;
+    
+    [~, baseName, ~] = fileparts(filePath);
+    
     try
         [signal, fs] = audioread(filePath);
     catch readErr
@@ -93,26 +107,28 @@ function [processedSignal, processedFileLabel, success] = processAudio(filePath,
         fprintf('Original Sample Rate is lower than %d kHz. Skipping resample.\n', targetFs/1000);
         return;
     elseif fs > targetFs
-        fprintf('The original sampling rate of %s is %d Hz.\n Adjusting sampling rate to %d kHz\n', inFile, fs, targetFs/1000);
+        fprintf('The original sampling rate of %s is %d Hz.\n Adjusting sampling rate to %d kHz\n', filePath, fs, targetFs/1000);
         try
             processedSignal = resample(processedSignal, targetFs, fs);
-            processedFs = targetFs;
+            
             fprintf('Successfully resampled to 16 kHz\n');
         catch rsErr
-            fprintf('Resample failed for %s: %s\n', inFile, rsErr.message);
+            fprintf('Resample failed for %s: %s\n', filePath, rsErr.message);
             return;
         end
     else
         fprintf('The original sampling rate of %s is already %d kHz. No resampling needed.\n', filePath, fs/1000);
     end
 
+    processedFs = targetFs;
+
     % Simple listen check
     if playAudio
-        playTime = min(5, numel(processedSignal)/fs); % play up to 5 seconds
-        fprintf('Playing cleaned mono audio for %ds from %s at %d Hz...\n', playTime, filePath, fs);
+        playTime = min(playDuration, numel(processedSignal)/processedFs); % play up to specified duration
+        fprintf('Playing cleaned mono audio for %.1fs from %s at %d Hz...\n', playTime, filePath, processedFs);
         try
-            sound(processedSignal, fs);
-            pause(playTime); % pause for up to 5 seconds or full duration
+            sound(processedSignal, processedFs);
+            pause(playTime); % pause for up to specified duration or full duration
         catch
             fprintf('Audio playback failed. Continuing processing...\n');
         end
@@ -126,32 +142,23 @@ function [processedSignal, processedFileLabel, success] = processAudio(filePath,
     processedFileLabel = processedOut;
 end
 
-function plotAudio(filePath, playCosine)
+function cosineSignal = plotCosine(filePath, playCosine, playDuration)
     [signal, fs] = audioread(filePath);
-    % Plot waveform (sample index vs amplitude) for the first processed file
-    fprintf('Plotting waveform for %s at %d Hz...\n', name, fs');
+    [~, name, ~] = fileparts(filePath);
 
-    figure('Name', 'Waveform (Sample Index vs Amplitude)');
-    plot(1:numel(signal), signal, 'LineWidth', 1);
-    grid on;
-    xlabel('Sample Index');
-    ylabel('Amplitude');
-    title('Processed Audio Waveform');
-
-    % Generate 1 kHz cosine matching length and duration of the processed signal
-    durationSeconds = numel(signal) / fs;
-    cosineFs = fs; % match sampling rate of processed audio
-    numSamples = numel(signal);
-    t = (0:numSamples-1).' / cosineFs;
+    samples = numel(signal);
+    fprintf('Generating 1 kHz cosine matching length of %s at %d Hz (%d samples)...\n', name, fs, samples);
+    t = (0:samples-1).' / fs;
     cosineFreqHz = 1000; % 1 kHz
+
     cosineSignal = cos(2*pi*cosineFreqHz*t);
 
-    % Playback generated cosine
     if playCosine
-        fprintf('Playing 1 kHz cosine (%.3f s) at %d Hz...\n', durationSeconds, cosineFs);
+        playTime = min(playDuration, numel(cosineSignal)/fs); % play up to specified duration
+        fprintf('Playing 1 kHz cosine (%.3f s) at %d Hz...\n', playTime, fs);
         try
-            sound(cosineSignal, cosineFs);
-            pause(durationSeconds); % wait for full playback duration
+            sound(cosineSignal, fs);
+            pause(playTime); % wait for full playback duration
         catch
             fprintf('Cosine playback failed. Continuing plotting...\n');
         end
@@ -159,7 +166,7 @@ function plotAudio(filePath, playCosine)
 
     % Plot two cycles of 1 kHz cosine vs time
     twoCyclesDuration = 2 / cosineFreqHz; % 2 ms for 1 kHz
-    twoCyclesSamples = max(1, round(twoCyclesDuration * cosineFs));
+    twoCyclesSamples = max(1, round(twoCyclesDuration * fs));
     figure('Name', '1 kHz Cosine - Two Cycles');
     plot(t(1:twoCyclesSamples)*1e3, cosineSignal(1:twoCyclesSamples), 'LineWidth', 1.5);
     grid on;
@@ -168,15 +175,29 @@ function plotAudio(filePath, playCosine)
     title('Two Cycles of 1 kHz Cosine');
 
     % Save generated cosine to disk matching first processed label
-    firstLabel = char(filePath{1});
-    [~, baseFirst, ~] = fileparts(firstLabel);
+    [~, baseFirst, ~] = fileparts(filePath);
+    % Get outputDir from the filePath
+    outputDir = fileparts(filePath);
     cosineOut = fullfile(outputDir, sprintf('%s_cosine1k.wav', baseFirst));
     try
-        audiowrite(cosineOut, cosineSignal, cosineFs);
+        audiowrite(cosineOut, cosineSignal, fs);
         fprintf('Wrote 1 kHz cosine: %s\n', cosineOut);
     catch writeErr
         fprintf('Failed to write cosine: %s\n', writeErr.message);
     end
+end
+
+function plotAudio(filePath)
+    [signal, fs] = audioread(filePath);
+    [~, name, ~] = fileparts(filePath);
+    % Plot waveform (sample index vs amplitude) for the first processed file
+    fprintf('Plotting waveform for %s at %d Hz...\n', name, fs);
+    figure('Name', sprintf('Waveform (Sample Index vs Amplitude) for %s', name));
+    plot(1:numel(signal), signal, 'LineWidth', 1);
+    grid on;
+    xlabel('Sample Index');
+    ylabel('Amplitude');
+    title('Processed Audio Waveform');
 end
 
 
