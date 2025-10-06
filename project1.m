@@ -6,7 +6,7 @@ if ~exist(outputDir, 'dir')
 end
 
 % Parameters
-validExts = {'.wav', '.flac', '.m4a', '.mp3'};
+validExts = {'.wav', '.m4a', '.mp3'};
 targetFs = 16000; % Hz
 playAudio = false; % set to true to listen to cleaned mono audio
 playCosine = false;
