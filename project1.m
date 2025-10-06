@@ -1,3 +1,27 @@
+
+% Run phase1 for each file in /Dataset/selected
+selectedDir = fullfile(pwd, 'Dataset', 'selected');
+audioFiles = dir(fullfile(selectedDir, '*.*'));
+validExts = {'.wav', '.flac', '.m4a', '.mp3'};
+fileList = {};
+
+for k = 1:numel(audioFiles)
+    [~, ~, ext] = fileparts(audioFiles(k).name);
+    if any(strcmpi(ext, validExts)) && ~audioFiles(k).isdir
+        fileList{end+1} = fullfile(selectedDir, audioFiles(k).name); %#ok<AGROW>
+    end
+end
+
+if isempty(fileList)
+    fprintf('No valid audio files found in %s\n', selectedDir);
+else
+    fprintf('Found %d valid audio files in %s\n', numel(fileList), selectedDir);
+    for i = 1:numel(fileList)
+        fprintf('  %s\n', fileList{i});
+    end
+    phase1(fileList);
+end
+
 function phase1(filePaths)
 % phase1: Read, normalize (mono), optionally resample to 16 kHz, analyze, and generate signals.
 % Usage:
