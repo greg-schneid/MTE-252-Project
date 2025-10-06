@@ -4,7 +4,7 @@ function phase1(filePaths)
 %   phase1                 % prompts to select one or more audio files
 %   phase1({"file1.wav", "file2.m4a"})
 %
-% This script/function will:
+% This script/function will do this:
 % - Load one or more audio files using audioread
 % - Convert stereo to mono by averaging channels
 % - Play and write a cleaned mono version to disk
