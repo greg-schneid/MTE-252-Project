@@ -1,28 +1,60 @@
-
-% Run phase1 for each file in /Dataset/selected
+% Directories
 selectedDir = fullfile(pwd, 'Dataset', 'selected');
+outputDir = fullfile(pwd, 'Dataset','processed');
+if ~exist(outputDir, 'dir')
+    mkdir(outputDir);
+end
+
+% Config
 audioFiles = dir(fullfile(selectedDir, '*.*'));
 validExts = {'.wav', '.flac', '.m4a', '.mp3'};
-fileList = {};
+targetFs = 16000; % Hz
+playAudio = false; % set to true to listen to cleaned mono audio
+playCosine = true;
 
-for k = 1:numel(audioFiles)
-    [~, ~, ext] = fileparts(audioFiles(k).name);
-    if any(strcmpi(ext, validExts)) && ~audioFiles(k).isdir
-        fileList{end+1} = fullfile(selectedDir, audioFiles(k).name); %#ok<AGROW>
-    end
+% Variables
+files = getFiles(audioFiles, validExts);
+processedSignals = {};
+processedFileLabels = {};
+
+for fileIdx = 1:length(files)
+    fprintf('Processing file %d of %d: %s\n', fileIdx, length(files), files{fileIdx});
+    [processedSignals{fileIdx}, processedFileLabels{fileIdx}] = processAudio(files{fileIdx}, targetFs, playAudio);
 end
 
-if isempty(fileList)
-    fprintf('No valid audio files found in %s\n', selectedDir);
+if isempty(processedSignals)
+    fprintf('No files processed successfully.\n');
+    return;
 else
-    fprintf('Found %d valid audio files in %s\n', numel(fileList), selectedDir);
-    for i = 1:numel(fileList)
-        fprintf('  %s\n', fileList{i});
-    end
-    phase1(fileList);
+    fprintf('Processed %d files successfully.\n', numel(processedSignals));
 end
 
-function phase1(filePaths)
+for i = 1:length(processedFileLabels)
+    fprintf('Plotting File %d of %d: %s\n', i, length(processedFileLabels), processedFileLabels{i});
+    plotAudio(processedFileLabels{i}, playCosine);
+end
+
+
+
+function fileList = getFiles(audioFiles, validExts)
+    for k = 1:numel(audioFiles)
+        [~, ~, ext] = fileparts(audioFiles(k).name);
+        if any(strcmpi(ext, validExts)) && ~audioFiles(k).isdir
+            fileList{end+1} = fullfile(selectedDir, audioFiles(k).name); %#ok<AGROW>
+        end
+    end
+
+    if isempty(fileList)
+        fprintf('No valid audio files found in %s\n', selectedDir);
+    else
+        fprintf('Found %d valid audio files in %s\n', numel(fileList), selectedDir);
+        for i = 1:numel(fileList)
+            fprintf('  %s\n', fileList{i});
+        end
+    end
+end
+
+function [processedSignal, processedFileLabel, success] = processAudio(filePath, targetFs, playAudio)
 % phase1: Read, normalize (mono), optionally resample to 16 kHz, analyze, and generate signals.
 % Usage:
 %   phase1                 % prompts to select one or more audio files
@@ -36,139 +68,93 @@ function phase1(filePaths)
 % - Plot waveform (sample index vs amplitude) for the first processed file
 % - Generate a 1 kHz cosine matching the processed signal length and duration
 % - Play the cosine and plot two cycles versus time
-
-    if nargin < 1 || isempty(filePaths)
-        [names, path] = uigetfile({'*.wav;*.flac;*.m4a;*.mp3','Audio Files (*.wav, *.flac, *.m4a, *.mp3)';
-                                   '*.*','All Files (*.*)'}, 'Select audio file(s)', 'MultiSelect', 'on');
-        if isequal(names, 0)
-            fprintf('No files selected. Exiting.\n');
-            return;
-        end
-        if ischar(names)
-            filePaths = {fullfile(path, names)}; %#ok<ISCHART> % single selection
-        else
-            filePaths = cellfun(@(n) fullfile(path, n), names, 'UniformOutput', false);
-        end
-    elseif ischar(filePaths)
-        filePaths = {filePaths}; %#ok<ISCHART>
-    end
-
-    outputDir = fullfile(pwd, 'processed');
-    if ~exist(outputDir, 'dir')
-        mkdir(outputDir);
-    end
-
-    processedSignals = {};
-    processedSampleRates = [];
-    processedFileLabels = {};
-
-    targetFs = 16000;
-
-    for idx = 1:numel(filePaths)
-        inFile = filePaths{idx};
-        try
-            [signal, fs] = audioread(inFile);
-        catch readErr
-            fprintf('Failed to read %s: %s\n', inFile, readErr.message);
-            continue;
-        end
-
-        if isempty(signal)
-            fprintf('File %s seems empty. Skipping.\n', inFile);
-            continue;
-        end
-
-        % Convert to mono if stereo
-        if size(signal, 2) == 2
-            monoSignal = mean(signal, 2);
-        else
-            monoSignal = signal(:, 1);
-        end
-
-        % Simple listen check
-        fprintf('Playing cleaned mono from %s at %d Hz...\n', inFile, fs);
-        try
-            sound(monoSignal, fs);
-            pause(numel(monoSignal)/fs); % wait for full playback duration
-        catch
-            % playback may fail on some systems; continue processing
-        end
-
-        % Write cleaned mono (original sample rate)
-        [~, baseName, ~] = fileparts(inFile);
-        cleanedOut = fullfile(outputDir, sprintf('%s_mono.wav', baseName));
-        try
-            audiowrite(cleanedOut, monoSignal, fs);
-            fprintf('Wrote cleaned mono: %s\n', cleanedOut);
-        catch writeErr
-            fprintf('Failed to write %s: %s\n', cleanedOut, writeErr.message);
-        end
-
-        % Resample to 16 kHz if appropriate
-        if fs < targetFs
-            fprintf(['WARNING: Original sampling rate %d Hz is lower than %d Hz. '\n ...
-                     'It is recommended to re-record at a higher rate and repeat. Skipping resample.\n'], fs, targetFs);
-            processedSignal = monoSignal;
-            processedFs = fs;
-            resampledOut = '';
-        elseif fs ~= targetFs
-            try
-                processedSignal = resample(monoSignal, targetFs, fs);
-                processedFs = targetFs;
-                resampledOut = fullfile(outputDir, sprintf('%s_mono_16k.wav', baseName));
-                audiowrite(resampledOut, processedSignal, processedFs);
-                fprintf('Resampled to 16 kHz and wrote: %s\n', resampledOut);
-            catch rsErr
-                fprintf('Resample failed for %s: %s\n', inFile, rsErr.message);
-                processedSignal = monoSignal;
-                processedFs = fs;
-                resampledOut = '';
-            end
-        else
-            processedSignal = monoSignal;
-            processedFs = fs;
-            resampledOut = cleanedOut;
-        end
-
-        processedSignals{end+1} = processedSignal; %#ok<AGROW>
-        processedSampleRates(end+1) = processedFs; %#ok<AGROW>
-        if ~isempty(resampledOut)
-            currentLabel = string(resampledOut);
-        else
-            currentLabel = string(cleanedOut);
-        end
-        processedFileLabels{end+1} = currentLabel; %#ok<AGROW>
-    end
-
-    if isempty(processedSignals)
-        fprintf('No files processed successfully.\n');
+    success = false;
+    try
+        [signal, fs] = audioread(filePath);
+    catch readErr
+        fprintf('Failed to read %s: %s\n', filePath, readErr.message);
         return;
     end
 
+    if isempty(signal)
+        fprintf('File %s seems empty. Skipping.\n', filePath);
+        return;
+    end
+
+    % Convert to mono if stereo
+    if size(signal, 2) == 2
+        processedSignal = mean(signal, 2);
+    else
+        processedSignal = signal(:, 1);
+    end
+    
+    % Resample to 16 kHz
+    if fs < targetFs
+        fprintf('Original Sample Rate is lower than %d kHz. Skipping resample.\n', targetFs/1000);
+        return;
+    elseif fs > targetFs
+        fprintf('The original sampling rate of %s is %d Hz.\n Adjusting sampling rate to %d kHz\n', inFile, fs, targetFs/1000);
+        try
+            processedSignal = resample(processedSignal, targetFs, fs);
+            processedFs = targetFs;
+            fprintf('Successfully resampled to 16 kHz\n');
+        catch rsErr
+            fprintf('Resample failed for %s: %s\n', inFile, rsErr.message);
+            return;
+        end
+    else
+        fprintf('The original sampling rate of %s is already %d kHz. No resampling needed.\n', filePath, fs/1000);
+    end
+
+    % Simple listen check
+    if playAudio
+        playTime = min(5, numel(processedSignal)/fs); % play up to 5 seconds
+        fprintf('Playing cleaned mono audio for %ds from %s at %d Hz...\n', playTime, filePath, fs);
+        try
+            sound(processedSignal, fs);
+            pause(playTime); % pause for up to 5 seconds or full duration
+        catch
+            fprintf('Audio playback failed. Continuing processing...\n');
+        end
+    end
+
+    processedOut = fullfile(outputDir, sprintf('%s_mono_16k.wav', baseName));
+    audiowrite(processedOut, processedSignal, processedFs);
+    fprintf('Wrote cleaned mono audio: %s\n', processedOut);
+
+    success = true;
+    processedFileLabel = processedOut;
+end
+
+function plotAudio(filePath, playCosine)
+    [signal, fs] = audioread(filePath);
     % Plot waveform (sample index vs amplitude) for the first processed file
-    firstSignal = processedSignals{1};
-    firstFs = processedSampleRates(1);
+    fprintf('Plotting waveform for %s at %d Hz...\n', name, fs');
+
     figure('Name', 'Waveform (Sample Index vs Amplitude)');
-    plot(1:numel(firstSignal), firstSignal, 'LineWidth', 1);
+    plot(1:numel(signal), signal, 'LineWidth', 1);
     grid on;
     xlabel('Sample Index');
     ylabel('Amplitude');
     title('Processed Audio Waveform');
 
     % Generate 1 kHz cosine matching length and duration of the processed signal
-    durationSeconds = numel(firstSignal) / firstFs;
-    cosineFs = firstFs; % match sampling rate of processed audio
-    numSamples = numel(firstSignal);
+    durationSeconds = numel(signal) / fs;
+    cosineFs = fs; % match sampling rate of processed audio
+    numSamples = numel(signal);
     t = (0:numSamples-1).' / cosineFs;
     cosineFreqHz = 1000; % 1 kHz
     cosineSignal = cos(2*pi*cosineFreqHz*t);
 
     % Playback generated cosine
-    fprintf('Playing 1 kHz cosine (%.3f s) at %d Hz...\n', durationSeconds, cosineFs);
-    try
-        sound(cosineSignal, cosineFs);
-        pause(durationSeconds); % wait for full playback duration
-    catch
+    if playCosine
+        fprintf('Playing 1 kHz cosine (%.3f s) at %d Hz...\n', durationSeconds, cosineFs);
+        try
+            sound(cosineSignal, cosineFs);
+            pause(durationSeconds); % wait for full playback duration
+        catch
+            fprintf('Cosine playback failed. Continuing plotting...\n');
+        end
     end
 
     % Plot two cycles of 1 kHz cosine vs time
@@ -182,7 +168,7 @@ function phase1(filePaths)
     title('Two Cycles of 1 kHz Cosine');
 
     % Save generated cosine to disk matching first processed label
-    firstLabel = char(processedFileLabels{1});
+    firstLabel = char(filePath{1});
     [~, baseFirst, ~] = fileparts(firstLabel);
     cosineOut = fullfile(outputDir, sprintf('%s_cosine1k.wav', baseFirst));
     try
