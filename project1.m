@@ -172,7 +172,7 @@ function cosineSignal = plotCosine(filePath, playCosine, playDuration)
     grid on;
     xlabel('Time (ms)');
     ylabel('Amplitude');
-    title('Two Cycles of 1 kHz Cosine');
+    title(sprintf('Two Cycles of 1 kHz Cosine for %s', name));
 
     % Save generated cosine to disk matching first processed label
     [~, baseFirst, ~] = fileparts(filePath);
@@ -197,7 +197,7 @@ function plotAudio(filePath)
     grid on;
     xlabel('Sample Index');
     ylabel('Amplitude');
-    title('Processed Audio Waveform');
+    title(sprintf('Processed Audio Waveform for %s', name));
 end
 
 
