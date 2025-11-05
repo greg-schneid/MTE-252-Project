@@ -30,4 +30,8 @@ s_{\text{eval 4}}
 \right)
 $$
 
+Where $s_{eval \space i}$ is the sample standard deviation for a given sample
+
+---
+
 Worked on by Abhay Rhatti and Greg Schneider

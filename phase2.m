@@ -1,12 +1,16 @@
 % Author: Greg Schneider, Abhay Ratti
 
-function plot_min_max_signals(signals, name)
+%Parameters
+n_channels = 16;
+sample_rate = 16000; %hz
+
+function plot_min_max_signals(signals, name, sample_rate)
     % Plot Signals of Lowest and Highest Frequency Bands
     figure('Name', name);
     
     % Create time vector for x-axis
-    time1 = (0:length(signals{1})-1) / 16000;
-    timeN = (0:length(signals{length(signals)})-1) / 16000;
+    time1 = (0:length(signals{1})-1) / sample_rate;
+    timeN = (0:length(signals{length(signals)})-1) / sample_rate;
     
     % Work out Frequency range for both signals
     n = length(signals);
@@ -34,7 +38,7 @@ function plot_min_max_signals(signals, name)
     sgtitle(name);
 end
 
-function split_signals = split_frequency(n, signal)
+function split_signals = split_frequency(n, sample_rate, signal)
     split_signals = cell (1,n);
     low_freq = 100; % Hz
     hi_freq = 8000; % Hz
@@ -42,24 +46,24 @@ function split_signals = split_frequency(n, signal)
     for i = 1:n
         band_low = low_freq + (i-1) * freq_step;
         band_high = low_freq + i * freq_step;
-        split_signals{i} = bandpass(signal, [band_low, band_high], 16000);
+        split_signals{i} = bandpass(signal, [band_low, band_high], sample_rate);
     end
 
-    plot_min_max_signals(split_signals, 'Signals of Lowest and Highest Frequency Bands');
+    plot_min_max_signals(split_signals, 'Signals of Lowest and Highest Frequency Bands', sample_rate);
 end
 
 %Tasks 
-function processed_signals = envelope_extraction(signals)
+function processed_signals = envelope_extraction(signals, sample_rate)
     processed_signals = cell(size(signals));
     for i = 1:length(signals)
         % Lowpass filter has a cutoff frequency of 400 Hz, and sample rate of 16 kHz
         % Outer Abs included since sometimes lowpass can produce small negative values
-        processed_signals{i} = abs(lowpass(abs(signals{i}), 400, 16000)); % Rectification & Lowpass Filtering
+        processed_signals{i} = abs(lowpass(abs(signals{i}), 400, sample_rate)); % Rectification & Lowpass Filtering
     end
-    plot_min_max_signals(processed_signals, 'Envelope Extracted Signals of Lowest and Highest Frequency Bands');
+    plot_min_max_signals(processed_signals, 'Envelope Extracted Signals of Lowest and Highest Frequency Bands', sample_rate);
 end
 
 
 % Main Execution
-signals = split_frequency(16, audioread('Dataset/processed/siren_mono_16k.wav'));
-processed_signals = envelope_extraction(signals);
+signals = split_frequency(n_channels, sample_rate, audioread('Dataset/processed/siren_mono_16k.wav'));
+processed_signals = envelope_extraction(signals, sample_rate);
