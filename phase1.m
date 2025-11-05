@@ -1,8 +1,12 @@
 % Directories
 selectedDir = fullfile(pwd, 'Dataset', 'selected');
 outputDir = fullfile(pwd, 'Dataset','processed');
+cosineDir = fullfile(pwd, 'Dataset', 'processed', 'cosine');
 if ~exist(outputDir, 'dir')
     mkdir(outputDir);
+end
+if ~exist(cosineDir, 'dir')
+    mkdir(cosineDir);
 end
 
 % Parameters
@@ -39,7 +43,7 @@ end
 for i = 1:length(processedFileLabels)
     fprintf('Plotting File %d of %d: %s\n', i, length(processedFileLabels), processedFileLabels{i});
     plotAudio(processedFileLabels{i});
-    plotCosine(processedFileLabels{i}, playCosine, playDuration);
+    plotCosine(processedFileLabels{i}, playCosine, playDuration, cosineDir);
 end
 
 
@@ -142,7 +146,7 @@ function [processedSignal, processedFileLabel, success] = processAudio(filePath,
     processedFileLabel = processedOut;
 end
 
-function cosineSignal = plotCosine(filePath, playCosine, playDuration)
+function cosineSignal = plotCosine(filePath, playCosine, playDuration, cosineDir)
     [signal, fs] = audioread(filePath);
     [~, name, ~] = fileparts(filePath);
 
@@ -174,11 +178,9 @@ function cosineSignal = plotCosine(filePath, playCosine, playDuration)
     ylabel('Amplitude');
     title(sprintf('Two Cycles of 1 kHz Cosine for %s', name));
 
-    % Save generated cosine to disk matching first processed label
+    % Save generated cosine to Dataset/processed/cosine directory
     [~, baseFirst, ~] = fileparts(filePath);
-    % Get outputDir from the filePath
-    outputDir = fileparts(filePath);
-    cosineOut = fullfile(outputDir, sprintf('%s_cosine1k.wav', baseFirst));
+    cosineOut = fullfile(cosineDir, sprintf('%s_cosine1k.wav', baseFirst));
     try
         audiowrite(cosineOut, cosineSignal, fs);
         fprintf('Wrote 1 kHz cosine: %s\n', cosineOut);
