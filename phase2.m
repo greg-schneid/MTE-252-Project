@@ -41,7 +41,7 @@ function split_signals = split_frequency(n, signal)
     freq_step = (hi_freq - low_freq) / n;
     for i = 1:n
         band_low = low_freq + (i-1) * freq_step;
-        band_high = low_freq + i * freq_step; % Ensure we stay below Nyquist frequency
+        band_high = low_freq + i * freq_step;
         split_signals{i} = bandpass(signal, [band_low, band_high], 16000);
     end
 
