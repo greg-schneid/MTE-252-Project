@@ -65,5 +65,6 @@ end
 
 
 % Main Execution
+plot_min_max_signals({audioread('Dataset/processed/siren_mono_16k.wav')}, 'Original Signal', sample_rate);
 signals = split_frequency(n_channels, sample_rate, audioread('Dataset/processed/siren_mono_16k.wav'));
 processed_signals = envelope_extraction(signals, sample_rate);
