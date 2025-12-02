@@ -5,7 +5,7 @@
 n_channels = 16;
 sample_rate = 16000; % Hz
 playAudio = true; % Set to true to play the output sound (ignored if process_all is true)
-process_all = true; % Set to true to process all files in the processed directory
+process_all = false; % Set to true to process all files in the processed directory
 inputDir = 'Dataset/processed';
 outputDir = 'Dataset/reworked';
 inputFile = 'Dataset/processed/siren_mono_16k.wav'; % Used when process_all is false

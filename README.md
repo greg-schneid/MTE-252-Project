@@ -6,6 +6,7 @@ Repository for MTE 252 Project for Mechatronics Engineering at the University of
 
 
 **Scoring Methodology:**
+
 $$
 \text{score} = \text{average}\left(
 \begin{bmatrix}
@@ -18,7 +19,7 @@ $$
 \text{sample 7, eval 1} & \text{sample 7, eval 2} & \text{sample 7, eval 3} & \text{sample 7, eval 4} \\
 \text{sample 8, eval 1} & \text{sample 8, eval 2} & \text{sample 8, eval 3} & \text{sample 8, eval 4} \\
 \end{bmatrix}
-\right) +
+\right) -
 
 \text{average}\left(
 \begin{bmatrix}
@@ -30,7 +31,7 @@ s_{\text{eval 4}}
 \right)
 $$
 
-Where $s_{eval \space i}$ is the sample standard deviation for a given sample
+Where $s_{eval \space i}$ is the sample standard deviation for a given sample, and all evals are normalized between 0-1
 
 ---
 
