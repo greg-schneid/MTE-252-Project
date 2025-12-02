@@ -37,17 +37,28 @@ function split_signals = split_frequency(n, sample_rate, signal)
     low_freq = 100; % Hz
     hi_freq = 8000; % Hz
     freq_step = (hi_freq - low_freq) / n;
-    nyquist = sample_rate / 2;
+    overlap_fraction = 0.20; % 20% overlap between adjacent bands
+    overlap = freq_step * overlap_fraction;
+    
     for i = 1:n
-        band_low = low_freq + (i-1) * freq_step;
-        band_high = low_freq + i * freq_step;
-        % Design FIR bandpass filter with normalized frequencies
-        % Frequencies must be strictly between 0 and 1 (exclusive)
-        fir_order = 128; % FIR filter order
-        normalized_low = max(band_low / nyquist, 0.001);   % Clamp above 0
-        normalized_high = min(band_high / nyquist, 0.999); % Clamp below 1
-        b = fir1(fir_order, [normalized_low, normalized_high], 'bandpass');
-        split_signals{i} = filtfilt(b, 1, signal);
+        % Calculate nominal band edges
+        nominal_low = low_freq + (i-1) * freq_step;
+        nominal_high = low_freq + i * freq_step;
+        
+        % Extend bands by half the overlap on each side (except at boundaries)
+        if i == 1
+            band_low = nominal_low; % Don't extend below the first band
+        else
+            band_low = nominal_low - overlap / 2;
+        end
+        
+        if i == n
+            band_high = nominal_high; % Don't extend above the last band
+        else
+            band_high = nominal_high + overlap / 2;
+        end
+        
+        split_signals{i} = bandpass(signal, [band_low, band_high], sample_rate);
     end
 end
 
@@ -56,11 +67,7 @@ function processed_signals = envelope_extraction(signals, sample_rate)
     for i = 1:length(signals)
         % Lowpass filter has a cutoff frequency of 400 Hz, and sample rate of 16 kHz
         % Outer Abs included since sometimes lowpass can produce small negative values
-        % Design FIR lowpass filter with normalized frequency
-        fir_order = 128; % FIR filter order
-        normalized_cutoff = 400 / (sample_rate / 2);
-        b = fir1(fir_order, normalized_cutoff, 'low');
-        processed_signals{i} = abs(filtfilt(b, 1, abs(signals{i}))); % Rectification & Lowpass Filtering
+        processed_signals{i} = abs(lowpass(abs(signals{i}), 400, sample_rate)); % Rectification & Lowpass Filtering
     end
 end
 
@@ -72,11 +79,28 @@ function cosine_signals = generate_channel_cosines(n, sample_rate, envelope_sign
     low_freq = 100; % Hz
     hi_freq = 8000; % Hz
     freq_step = (hi_freq - low_freq) / n;
+    overlap_fraction = 0.20; % 20% overlap between adjacent bands
+    overlap = freq_step * overlap_fraction;
     
     for i = 1:n
-        % Calculate the central frequency of this channel's bandpass filter
-        band_low = low_freq + (i-1) * freq_step;
-        band_high = low_freq + i * freq_step;
+        % Calculate nominal band edges
+        nominal_low = low_freq + (i-1) * freq_step;
+        nominal_high = low_freq + i * freq_step;
+        
+        % Extend bands by half the overlap on each side (except at boundaries)
+        if i == 1
+            band_low = nominal_low;
+        else
+            band_low = nominal_low - overlap / 2;
+        end
+        
+        if i == n
+            band_high = nominal_high;
+        else
+            band_high = nominal_high + overlap / 2;
+        end
+        
+        % Center frequency is the midpoint of the actual (overlapped) band
         center_freq = (band_low + band_high) / 2;
         
         % Get the length of the rectified/envelope signal for this channel
@@ -210,3 +234,4 @@ else
     process_file(inputFile, n_channels, sample_rate, playAudio, outputDir);
     fprintf('\n=== Phase 3 Complete ===\n');
 end
+

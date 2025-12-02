@@ -38,29 +38,49 @@ function split_signals = split_frequency(n, sample_rate, signal)
     hi_freq = 8000; % Hz
     freq_step = (hi_freq - low_freq) / n;
     nyquist = sample_rate / 2;
+    
+    % Chebyshev Type 2 parameters
+    filter_order = 1;          % Filter order (higher = sharper cutoff)
+    stopband_atten = 40;       % Stopband attenuation in dB
+    
     for i = 1:n
         band_low = low_freq + (i-1) * freq_step;
         band_high = low_freq + i * freq_step;
-        % Design FIR bandpass filter with normalized frequencies
-        % Frequencies must be strictly between 0 and 1 (exclusive)
-        fir_order = 128; % FIR filter order
-        normalized_low = max(band_low / nyquist, 0.001);   % Clamp above 0
-        normalized_high = min(band_high / nyquist, 0.999); % Clamp below 1
-        b = fir1(fir_order, [normalized_low, normalized_high], 'bandpass');
-        split_signals{i} = filtfilt(b, 1, signal);
+        
+        % Normalized frequencies (0 to 1, where 1 = Nyquist)
+        Wn = [band_low, band_high] / nyquist;
+        
+        % Clamp to valid range (strictly between 0 and 1)
+        Wn(1) = max(Wn(1), 0.001);
+        Wn(2) = min(Wn(2), 0.999);
+        
+        % Design Chebyshev Type 2 bandpass filter using SOS form for numerical stability
+        [z, p, k] = cheby2(filter_order, stopband_atten, Wn, 'bandpass');
+        [sos, g] = zp2sos(z, p, k);
+        
+        % Apply zero-phase filtering using SOS
+        split_signals{i} = filtfilt(sos, g, signal);
     end
 end
 
 function processed_signals = envelope_extraction(signals, sample_rate)
     processed_signals = cell(size(signals));
+    
+    % Chebyshev Type 2 lowpass parameters
+    filter_order = 4;          % Filter order
+    stopband_atten = 40;       % Stopband attenuation in dB
+    cutoff_freq = 400;         % Hz
+    nyquist = sample_rate / 2;
+    Wn = cutoff_freq / nyquist;
+    
+    % Design Chebyshev Type 2 lowpass filter using SOS form for numerical stability
+    [z, p, k] = cheby2(filter_order, stopband_atten, Wn, 'low');
+    [sos, g] = zp2sos(z, p, k);
+    
     for i = 1:length(signals)
-        % Lowpass filter has a cutoff frequency of 400 Hz, and sample rate of 16 kHz
-        % Outer Abs included since sometimes lowpass can produce small negative values
-        % Design FIR lowpass filter with normalized frequency
-        fir_order = 128; % FIR filter order
-        normalized_cutoff = 400 / (sample_rate / 2);
-        b = fir1(fir_order, normalized_cutoff, 'low');
-        processed_signals{i} = abs(filtfilt(b, 1, abs(signals{i}))); % Rectification & Lowpass Filtering
+        % Rectification & Lowpass Filtering
+        % Outer Abs included since sometimes filter can produce small negative values
+        processed_signals{i} = abs(filtfilt(sos, g, abs(signals{i})));
     end
 end
 
@@ -210,3 +230,4 @@ else
     process_file(inputFile, n_channels, sample_rate, playAudio, outputDir);
     fprintf('\n=== Phase 3 Complete ===\n');
 end
+

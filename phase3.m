@@ -6,9 +6,9 @@ n_channels = 16;
 sample_rate = 16000; % Hz
 playAudio = true; % Set to true to play the output sound (ignored if process_all is true)
 process_all = true; % Set to true to process all files in the processed directory
-inputDir = 'Project/Dataset/processed';
-outputDir = 'Project/Dataset/reworked';
-inputFile = 'Project/Dataset/processed/siren_mono_16k.wav'; % Used when process_all is false
+inputDir = 'Dataset/processed';
+outputDir = 'Dataset/reworked';
+inputFile = 'Dataset/processed/siren_mono_16k.wav'; % Used when process_all is false
 validExts = {'.wav'}; % Valid audio extensions to process
 
 function fileList = getFiles(inputDir, validExts)
